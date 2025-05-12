@@ -1,0 +1,42 @@
+﻿@using MudBlazor
+@using TaskManagement.Models
+
+<MudDialog>
+    <TitleContent>
+        <MudText>Add New Task</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudTextField @bind-Value="Task.Title" Label="Title" Required="true" />
+        <MudTextField @bind-Value="Task.Description" Label="Description" Lines="3" />
+        <MudDatePicker Label="Due Date" @bind-Date="Task.DueDate" />
+        <MudSelect @bind-Value="Task.Priority" Label="Priority">
+            <MudSelectItem Value="@("Low")">Low</MudSelectItem>
+            <MudSelectItem Value="@("Medium")">Medium</MudSelectItem>
+            <MudSelectItem Value="@("High")">High</MudSelectItem>
+        </MudSelect>
+        <MudSelect @bind-Value="Task.Status" Label="Status">
+            <MudSelectItem Value="@("ToDo")">To Do</MudSelectItem>
+            <MudSelectItem Value="@("InProgress")">In Progress</MudSelectItem>
+            <MudSelectItem Value="@("Done")">Done</MudSelectItem>
+        </MudSelect>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="Cancel">Cancel</MudButton>
+        <MudButton Color="Color.Primary" OnClick="Save">Save</MudButton>
+    </DialogActions>
+</MudDialog>
+
+@code {
+    [CascadingParameter] public IMudDialogInstance MudDialog { get; set; }
+    [Parameter] public TaskItem Task { get; set; } = new();
+
+    private void Save()
+    {
+        MudDialog.Close(DialogResult.Ok(Task));
+    }
+
+    private void Cancel()
+    {
+        MudDialog.Cancel();
+    }
+}

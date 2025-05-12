@@ -1,0 +1,68 @@
+﻿@using MudBlazor
+@inherits LayoutComponentBase
+
+
+<MudThemeProvider Theme="customTheme"/>
+<MudPopoverProvider/>
+<MudDialogProvider/>
+<MudSnackbarProvider/>
+
+<MudLayout>
+    <MudMainContent>
+        <Task_Management.Components.Pages.Index/>
+    </MudMainContent>
+</MudLayout>
+
+
+
+@code {
+    private MudTheme customTheme = new MudTheme
+    {
+            PaletteLight = new PaletteLight()
+            {
+                Primary = Colors.Blue.Default,
+                Secondary = Colors.Green.Default,
+                Error = Colors.Red.Default,
+                Warning = Colors.Orange.Default,
+                Info = Colors.Blue.Accent3,
+                Background = Colors.Gray.Lighten4,
+                Surface = "#FFFFFF",
+                TextPrimary = Colors.Gray.Darken4,
+                TextSecondary = Colors.Gray.Darken2,
+                AppbarBackground = Colors.Blue.Darken2,
+            },
+   
+   
+        Typography = new Typography
+        {
+            Default = new DefaultTypography()
+            {
+                FontFamily = new[] { "Roboto", "Helvetica", "Arial", "sans-serif" },
+                FontSize = "0.875rem",
+                FontWeight = "400",
+                LineHeight = "1.5"
+            },
+            H6 = new H6Typography()
+            {
+                FontSize = "1.25rem",
+                FontWeight = "500"
+            },
+            Body1 = new Body1Typography()
+            {
+                FontSize = "0.875rem",
+                FontWeight = "400"
+            },
+            Caption = new CaptionTypography()
+            {
+                FontSize = "0.75rem",
+                FontWeight = "400"
+            }
+        }
+    };
+}
+
+
+
+
+
+               

@@ -1,0 +1,344 @@
+﻿@page "/"
+@rendermode InteractiveServer
+@inject TaskManagement.Services.TaskService TaskService
+@inject ISnackbar Snackbar
+@using MudBlazor
+@using TaskManagement.Models
+@using Microsoft.AspNetCore.Components.Web
+
+<MudContainer MaxWidth="MaxWidth.Large">
+    <MudGrid>
+       <MudItem xs="12" Class="mb-4">
+    <MudButton Variant="Variant.Filled" Color="Color.Primary" OnClick="OpenAddTaskDialog" Disabled="@isOpeningDialog" Class="px-6">Add Task</MudButton>
+</MudItem>
+<MudDropContainer T="TaskItem" Items="tasks" ItemsSelector="@((item, dropzone) => item.Status == dropzone)" ItemDropped="ItemDropped" Class="d-flex flex-column flex-sm-row gap-4">
+    <ChildContent>
+        @foreach (var status in new[] { "ToDo", "InProgress", "Done" })
+        {
+                <MudCard Elevation="2" Class="@($"pa-4 status-card {(dropZoneOverStatus == status ? "drag-over" : "")}")" Style="@GetStatusCardStyle(status)">
+                    <MudCardHeader>
+                        <CardHeaderContent>
+                            <MudText Typo="Typo.h6" Color="Color.Primary">@status</MudText>
+                        </CardHeaderContent>
+                    </MudCardHeader>
+                    <MudCardContent>
+                        @foreach (var task in tasks.Where(t => t.Status == status))
+                        {
+                            <MudCard Elevation="1" Class="mb-3 task-card" Style="@GetTaskCardStyle(task)">
+                                <MudCardContent Class="pa-3">
+                                    <MudText Typo="Typo.body1" Class="font-weight-bold">
+                                        <MudIcon Icon="@GetStatusIcon(task.Status)" Size="Size.Small" Class="mr-1" />
+                                        @task.Title
+                                    </MudText>
+                                    <MudText Typo="Typo.body2" Color="Color.Secondary" Class="mb-2">@task.Description</MudText>
+                                    @if (task.DueDate.HasValue)
+                                    {
+                                        <MudText Typo="Typo.caption" Color="@(IsOverdue(task.DueDate.Value) ? Color.Error : Color.Secondary)">
+                                            <MudIcon Icon="@Icons.Material.Filled.Event" Size="Size.Small" Class="mr-1" />
+                                            Due: @task.DueDate.Value.ToShortDateString()
+                                        </MudText>
+                                    }
+                                    <MudChip T="string" Color="@GetPriorityColor(task.Priority)" Size="Size.Small" Class="mt-2">
+                                        <MudIcon Icon="@Icons.Material.Filled.PriorityHigh" Size="Size.Small" Class="mr-1" />
+                                        @task.Priority
+                                    </MudChip>
+                                </MudCardContent>
+                                <MudCardActions Class="pa-3">
+                                    <MudButton Variant="Variant.Text" Color="Color.Primary" OnClick="() => OpenEditTaskDialog(task)" Size="Size.Small">Edit</MudButton>
+                                    <MudButton Variant="Variant.Text" Color="Color.Error" OnClick="() => DeleteTask(task.Id)" Size="Size.Small">Delete</MudButton>
+                                </MudCardActions>
+                            </MudCard>
+                        }
+                    </MudCardContent>
+                </MudCard>
+                    <MudDropZone T="TaskItem" Identifier="@status" Class="flex-1" @ondropzoneenter="@(() => DropZoneEntered(status))" @ondropzoneleave="@(() => DropZoneExited(status))">
+                    </MudDropZone>
+        }
+    </ChildContent>
+</MudDropContainer>
+        }
+    </MudGrid>
+</MudContainer>
+
+<MudDialog @bind-Visible="isDialogVisible" Options=options>
+    <TitleContent>
+        <MudText>@(dialogMode == "add" ? "Add New Task" : "Update Task")</MudText>
+    </TitleContent>
+    <DialogContent>
+        <MudTextField @bind-Value="currentTask.Title" Label="Title" Required="true" Variant="Variant.Outlined" Class="mb-4" />
+        <MudTextField @bind-Value="currentTask.Description" Label="Description" Lines="3" Variant="Variant.Outlined" Class="mb-4" />
+        <MudDatePicker Label="Due Date" @bind-Date="currentTask.DueDate" Variant="Variant.Outlined" Class="mb-4" />
+        <MudSelect @bind-Value="currentTask.Priority" Label="Priority" Variant="Variant.Outlined" Class="mb-4">
+            <MudSelectItem Value="@("Low")">Low</MudSelectItem>
+            <MudSelectItem Value="@("Medium")">Medium</MudSelectItem>
+            <MudSelectItem Value="@("High")">High</MudSelectItem>
+        </MudSelect>
+        <MudSelect @bind-Value="currentTask.Status" Label="Status" Variant="Variant.Outlined">
+            <MudSelectItem Value="@("ToDo")">To Do</MudSelectItem>
+            <MudSelectItem Value="@("InProgress")">In Progress</MudSelectItem>
+            <MudSelectItem Value="@("Done")">Done</MudSelectItem>
+        </MudSelect>
+    </DialogContent>
+    <DialogActions>
+        <MudButton OnClick="CancelDialog" Variant="Variant.Text" Color="Color.Default">Cancel</MudButton>
+        <MudButton OnClick="SaveTask" Variant="Variant.Filled" Color="Color.Primary">@(dialogMode == "add" ? "Save" : "Update")</MudButton>
+    </DialogActions>
+</MudDialog>
+
+<style>
+    .task-card {
+    animation: fadeIn 0.5s ease-in;
+    transition: transform 0.2s, box-shadow 0.2s;
+    }
+    .task-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 12px rgba(0,0,0,0.15);
+    }
+    .my-blurry-bg {
+    backdrop-filter: blur(5px);
+    background-color: rgba(255, 255, 255, 0.2);
+    }
+    .status-card.drag-over {
+    background-color: rgba(0, 0, 0, 0.05);
+    transition: background-color 0.2s;
+    }
+    @@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+    }
+
+    .status-card.drag-over {
+        background-color: rgba(0, 0, 0, 0.05);
+        transition: background-color 0.2s;
+    }
+</style>
+
+@code {
+    private List<TaskItem> tasks = new();
+    private bool isDialogVisible = false;
+    private bool isOpeningDialog = false;
+    private TaskItem currentTask = new();
+    private string dialogMode = "add";
+    private TaskItem? draggedTask;
+    private string? draggedOverStatus;
+    DialogOptions options = 
+       new DialogOptions { CloseButton = true, MaxWidth = MaxWidth.Small, BackgroundClass = "my-blurry-bg" };
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            tasks = await TaskService.GetTasksAsync();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error loading tasks: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private async Task OpenAddTaskDialog(){
+
+        if (isOpeningDialog) return;
+        isOpeningDialog = true;
+        Console.WriteLine("Opening Add Task Dialog");
+        try
+        {
+            dialogMode = "add";
+            currentTask = new TaskItem { Priority = "Medium", Status = "ToDo" };
+            isDialogVisible = true;
+            Console.WriteLine($"isDialogVisible: {isDialogVisible}, dialogMode: {dialogMode}");
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Dialog error: {ex.Message}\nStackTrace: {ex.StackTrace}");
+            Snackbar.Add($"Error opening dialog: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isOpeningDialog = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task OpenEditTaskDialog(TaskItem task)
+    {
+        if (isOpeningDialog) return;
+        isOpeningDialog = true;
+        Console.WriteLine("Opening Edit Task Dialog");
+        try
+        {
+            dialogMode = "update";
+            currentTask = new TaskItem
+            {
+                Id = task.Id,
+                Title = task.Title,
+                Description = task.Description,
+                DueDate = task.DueDate,
+                Priority = task.Priority,
+                Status = task.Status
+            };
+            isDialogVisible = true;
+            Console.WriteLine($"isDialogVisible: {isDialogVisible}, dialogMode: {dialogMode}, TaskId: {currentTask.Id}");
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Dialog error: {ex.Message}\nStackTrace: {ex.StackTrace}");
+            Snackbar.Add($"Error opening dialog: {ex.Message}", Severity.Error);
+        }
+        finally
+        {
+            isOpeningDialog = false;
+            StateHasChanged();
+        }
+    }
+
+    private async Task SaveTask()
+    {
+        if (string.IsNullOrWhiteSpace(currentTask.Title))
+        {
+            Snackbar.Add("Title is required.", Severity.Error);
+            return;
+        }
+
+        try
+        {
+            if (dialogMode == "add")
+            {
+                await TaskService.AddTaskAsync(currentTask);
+                Snackbar.Add("Task added successfully!", Severity.Success);
+            }
+            else
+            {
+                await TaskService.UpdateTaskAsync(currentTask);
+                Snackbar.Add("Task updated successfully!", Severity.Success);
+            }
+            isDialogVisible = false;
+            tasks = await TaskService.GetTasksAsync();
+            currentTask = new();
+            dialogMode = "add";
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"SaveTask error: {ex.Message}\nStackTrace: {ex.StackTrace}");
+            Snackbar.Add($"Error saving task: {ex.Message}", Severity.Error);
+        }
+    }
+
+
+    private void CancelDialog()
+    {
+        isDialogVisible = false;
+        currentTask = new();
+        dialogMode = "add";
+        StateHasChanged();
+    }
+
+    private async Task DeleteTask(int id)
+    {
+        try
+        {
+            await TaskService.DeleteTaskAsync(id);
+            tasks = await TaskService.GetTasksAsync();
+            Snackbar.Add("Task deleted successfully!", Severity.Success);
+            StateHasChanged();
+        }
+        catch (Exception ex)
+        {
+            Snackbar.Add($"Error deleting task: {ex.Message}", Severity.Error);
+        }
+    }
+
+    private string GetTaskCardStyle(TaskItem task)
+    {
+        var borderColor = task.Priority switch
+        {
+            "High" => Colors.Red.Default,
+            "Medium" => Colors.Orange.Default,
+            "Low" => Colors.Green.Default,
+            _ => Colors.Gray.Default
+        };
+        return $"border-left: 4px solid {borderColor};";
+    }
+
+    private Color GetPriorityColor(string priority)
+    {
+        return priority switch
+        {
+            "High" => Color.Error,
+            "Medium" => Color.Warning,
+            "Low" => Color.Success,
+            _ => Color.Default
+        };
+    }
+
+    private bool IsOverdue(DateTime dueDate)
+    {
+        return dueDate.Date < DateTime.Today;
+    }
+
+    private string GetStatusCardStyle(string status)
+    {
+        return status switch
+        {
+            "ToDo" => "border-top: 4px solid #2196F3;",
+            "InProgress" => "border-top: 4px solid #FF9800;",
+            "Done" => "border-top: 4px solid #4CAF50;",
+            _ => ""
+        };
+    }
+
+    private string GetStatusIcon(string status)
+    {
+        return status switch
+        {
+            "ToDo" => Icons.Material.Filled.CheckCircleOutline,
+            "InProgress" => Icons.Material.Filled.HourglassTop,
+            "Done" => Icons.Material.Filled.CheckCircle,
+            _ => Icons.Material.Filled.Info
+        };
+    }
+
+    private string? dropZoneOverStatus;
+
+    private async Task ItemDropped(MudItemDropInfo<TaskItem> dropInfo)
+    {
+        if (dropInfo.Item != null && dropInfo.DropzoneIdentifier != dropInfo.Item.Status)
+        {
+            try
+            {
+                dropInfo.Item.Status = dropInfo.DropzoneIdentifier;
+                await TaskService.UpdateTaskAsync(dropInfo.Item);
+                tasks = await TaskService.GetTasksAsync();
+                Snackbar.Add($"Task moved to {dropInfo.DropzoneIdentifier}", Severity.Success);
+            }
+            catch (Exception ex)
+            {
+                Snackbar.Add($"Error moving task: {ex.Message}", Severity.Error);
+            }
+            finally
+            {
+                dropZoneOverStatus = null;
+                StateHasChanged();
+            }
+        }
+    }
+
+    private void DropZoneEntered(string status)
+    {
+        dropZoneOverStatus = status;
+        StateHasChanged();
+    }
+
+    private void DropZoneExited(string status)
+    {
+        if (dropZoneOverStatus == status)
+        {
+            dropZoneOverStatus = null;
+            StateHasChanged();
+        }
+    }
+}
